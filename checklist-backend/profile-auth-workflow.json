@@ -1,0 +1,58 @@
+{
+  "name": "Checklist - Shared Profiles",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "profile-auth",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "id": "profile-auth-webhook",
+      "name": "Profile Auth Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ (() => { const body = $json.body || {}; const q = value => \"'\" + String(value || '').replace(/'/g, \"''\") + \"'\"; const action = body.action; if (action === 'list') return 'SELECT id, username, email, created_at FROM profiles ORDER BY LOWER(username)'; if (action === 'create') return `INSERT INTO profiles (username, email, password_hash) VALUES (${q(body.username)}, ${q(body.email)}, crypt(${q(body.password)}, gen_salt('bf', 12))) RETURNING id, username, email, created_at`; if (action === 'login') return `SELECT id, username, email, created_at FROM profiles WHERE username = ${q(body.username)} AND password_hash = crypt(${q(body.password)}, password_hash)`; throw new Error('Unsupported profile action'); })() }}"
+      },
+      "id": "profile-auth-query",
+      "name": "Profile Database Query",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [240, 0],
+      "credentials": {
+        "postgres": {
+          "id": "csYWOngm19vnRsF7",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const body = $('Profile Auth Webhook').item.json.body || {}; const rows = $input.all().map(item => item.json); if (body.action === 'list') return { status: 'success', profiles: rows }; if (rows.length === 0) return { status: 'error', message: 'Incorrect username or password' }; return { status: 'success', profile: rows[0] }; })() }}",
+        "options": {}
+      },
+      "id": "profile-auth-response",
+      "name": "Respond to Profile Auth",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "Profile Auth Webhook": {
+      "main": [[{ "node": "Profile Database Query", "type": "main", "index": 0 }]]
+    },
+    "Profile Database Query": {
+      "main": [[{ "node": "Respond to Profile Auth", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "checklist-shared-profiles-v1"
+}

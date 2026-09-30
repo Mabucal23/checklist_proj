@@ -980,17 +980,18 @@
 
     <script>
         const N8N_WEBHOOK_URL = 'https://ndb1.api.fpctools.com/webhook/add-task';
+        const PROFILE_API_URL = 'https://ndb1.api.fpctools.com/webhook/profile-auth';
         const boardContent = document.getElementById('board-content');
         const historyContent = document.getElementById('history-content');
 
-        // Auth & Data Management (Stores { password, email })
-        let usersDb = JSON.parse(localStorage.getItem('workspace_users_v2')) || {};
+        // Profile metadata is stored by n8n/Postgres; task drafts remain local until task CRUD endpoints exist.
+        let usersDb = {};
         let activeProfile = null;
         let activeEmail = null;
         let appState = { total: 0, progress: 0, done: 0 };
 
-        window.onload = () => {
-            renderProfiles();
+        window.onload = async () => {
+            await loadProfiles();
         };
 
         function getProfileColor(name) {
@@ -998,6 +999,27 @@
             let hash = 0;
             for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash) + name.charCodeAt(i);
             return colors[Math.abs(hash) % colors.length];
+        }
+
+        async function loadProfiles() {
+            try {
+                const response = await fetch(PROFILE_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'list' })
+                });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Unable to load profiles');
+                usersDb = Object.fromEntries((result.profiles || []).map(profile => [profile.username, {
+                    email: profile.email,
+                    id: profile.id
+                }]));
+                renderProfiles();
+            } catch (error) {
+                console.error('Profile loading error:', error);
+                alert('Profiles could not be loaded. Import and activate the profile-auth n8n workflow first.');
+                renderProfiles();
+            }
         }
 
         function renderProfiles() {
@@ -1046,27 +1068,28 @@
             document.getElementById('profile-creation').style.display = 'none';
         }
 
-        function createProfile() {
+        async function createProfile() {
             const name = document.getElementById('new-username').value.trim();
             const email = document.getElementById('new-email').value.trim();
             const pass = document.getElementById('new-password').value.trim();
 
             if (!name || !email || !pass) return alert('Please fill in all fields (Name, Email, Password).');
-            if (usersDb[name]) return alert('Profile already exists. Choose another name.');
-
-            usersDb[name] = { password: pass, email: email };
-            localStorage.setItem('workspace_users_v2', JSON.stringify(usersDb));
-
-            localStorage.setItem(`data_${name}`, JSON.stringify({
-                appState: { total: 0, progress: 0, done: 0 },
-                boardHtml: '',
-                historyHtml: ''
-            }));
-
-            activeProfile = name;
-            activeEmail = email;
-            hideCreateProfile();
-            unlockApp(name, email);
+            try {
+                const response = await fetch(PROFILE_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'create', username: name, email, password: pass })
+                });
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Unable to create profile');
+                usersDb[name] = { email, id: result.profile.id };
+                activeProfile = name;
+                activeEmail = email;
+                hideCreateProfile();
+                unlockApp(name, email);
+            } catch (error) {
+                alert(error.message);
+            }
         }
 
         function selectProfile(name) {
@@ -1091,16 +1114,24 @@
             if (e.key === 'Enter') verifyPassword();
         }
 
-        function verifyPassword() {
+            async function verifyPassword() {
             const pass = document.getElementById('login-password').value;
             const userData = usersDb[activeProfile];
 
-            if (userData && userData.password === pass) {
-                activeEmail = userData.email;
-                unlockApp(activeProfile, activeEmail);
-            } else {
-                alert('Incorrect Password');
-            }
+                if (!userData) return alert('Profile is no longer available. Refresh the profile list.');
+                try {
+                    const response = await fetch(PROFILE_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'login', username: activeProfile, password: pass })
+                    });
+                    const result = await response.json();
+                    if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Incorrect password');
+                    activeEmail = result.profile.email;
+                    unlockApp(result.profile.username, activeEmail);
+                } catch (error) {
+                    alert(error.message);
+                }
         }
 
         function logout() {
@@ -1143,10 +1174,14 @@
             document.getElementById('avatar-initial').textContent = name.charAt(0).toUpperCase();
             document.getElementById('welcome-message').textContent = `${name}'s Dashboard`;
 
-            const data = JSON.parse(localStorage.getItem(`data_${name}`));
-            appState = data.appState;
-            boardContent.innerHTML = data.boardHtml;
-            historyContent.innerHTML = data.historyHtml;
+            const data = JSON.parse(localStorage.getItem(`data_${name}`)) || {
+                appState: { total: 0, progress: 0, done: 0 },
+                boardHtml: '',
+                historyHtml: ''
+            };
+            appState = data.appState || { total: 0, progress: 0, done: 0 };
+            boardContent.innerHTML = data.boardHtml || '';
+            historyContent.innerHTML = data.historyHtml || '';
 
             if (boardContent.innerHTML.trim() === '') {
                 const initialGroup = createGroupWrapper("My Tasks");
