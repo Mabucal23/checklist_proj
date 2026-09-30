@@ -3,149 +3,588 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>n8n Checklist System</title>
+    <title>Workspace & Task Manager</title>
     <style>
+        :root {
+            --bg-main: #1e222a;
+            --bg-row: #262b35;
+            --bg-card: #2a303c;
+            --border-color: #3a414f;
+            --text-main: #ffffff;
+            --text-muted: #8b92a5;
+            --primary: #0070f3;
+            
+            /* Status Colors */
+            --status-done: #00c875;
+            --status-todo: #579bfc;
+            --status-progress: #fdab3d;
+            --status-blocked: #e2445c;
+            --status-group: #333c4d;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
             display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Login / Profile Screen --- */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-main);
+            display: flex;
+            align-items: center;
             justify-content: center;
-            padding-top: 50px;
+            z-index: 100;
+            transition: opacity 0.5s ease;
         }
-        .checklist-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        .login-box {
+            background: var(--bg-card);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 320px;
+        }
+        .login-box h2 { margin-top: 0; margin-bottom: 10px; }
+        .login-box input {
             width: 100%;
-            max-width: 400px;
+            padding: 12px;
+            margin: 8px 0;
+            background: var(--bg-main);
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
         }
-        h2 {
-            margin-top: 0;
-            color: #333;
-        }
-        form {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        input[type="text"] {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            padding: 10px 15px;
-            background-color: #0070f3; /* Vercel Blue */
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            background-color: var(--primary);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: bold;
+            transition: filter 0.2s;
         }
-        button:hover {
-            background-color: #005bb5;
+        .login-box button:hover { filter: brightness(1.1); }
+        .profile-btn {
+            background-color: var(--bg-row) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-main) !important;
+            margin-bottom: 6px !important;
+            margin-top: 0 !important;
         }
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            background: #f9f9f9;
-            margin-bottom: 8px;
-            padding: 10px;
-            border-radius: 4px;
+        .profile-btn:hover { border-color: var(--primary) !important; }
+
+        /* --- Sidebar Navigation --- */
+        #sidebar {
+            width: 250px;
+            background-color: var(--bg-row);
+            border-right: 1px solid var(--border-color);
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid #eee;
+            flex-direction: column;
+            padding: 20px 0;
         }
-        .completed {
-            text-decoration: line-through;
-            color: #888;
+        .profile-section {
+            padding: 0 20px 20px 20px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
         }
+        .profile-avatar {
+            width: 50px; height: 50px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;
+        }
+        .nav-item {
+            padding: 15px 20px; cursor: pointer; color: var(--text-muted);
+            transition: 0.2s; font-weight: 500;
+        }
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-card); color: white; border-left: 4px solid var(--primary);
+        }
+        .logout-btn {
+            margin-top: auto; padding: 15px 20px; color: var(--status-blocked); cursor: pointer;
+            font-weight: bold; border-top: 1px solid var(--border-color);
+        }
+        .logout-btn:hover { background-color: var(--bg-card); }
+
+        /* --- Main Content Area --- */
+        #main-content { flex: 1; padding: 40px; overflow-y: auto; }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+
+        /* --- Dashboard View --- */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+        .stat-card { background: var(--bg-card); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .stat-value { font-size: 2.5rem; font-weight: bold; margin: 10px 0; }
+        .stat-label { color: var(--text-muted); font-size: 0.9rem; }
+
+        /* --- History View --- */
+        .history-list { margin-top: 20px; }
+        .history-item { background: var(--bg-card); padding: 15px 20px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--status-done); display: flex; justify-content: space-between; }
+        .history-date { color: var(--text-muted); font-size: 0.85rem; }
+
+        /* --- Board View --- */
+        .header-actions { display: flex; gap: 15px; margin-bottom: 20px; }
+        button.action-btn { background-color: var(--status-todo); color: white; border: none; padding: 10px 16px; border-radius: 4px; cursor: pointer; }
+        button.action-btn.group-btn { background-color: var(--bg-card); border: 1px solid var(--border-color); }
+        .grid-row { display: grid; grid-template-columns: 40px minmax(250px, 2fr) minmax(200px, 1.5fr) 130px 150px; align-items: center; border-bottom: 1px solid var(--border-color); background-color: var(--bg-row); transition: opacity 0.3s ease; }
+        .grid-header { background-color: var(--bg-main); color: var(--text-muted); font-size: 0.85rem; padding-bottom: 10px; border-bottom: 2px solid var(--border-color); }
+        .cell { padding: 8px 12px; height: 100%; box-sizing: border-box; border-right: 1px solid var(--border-color); display: flex; align-items: center; }
+        .cell:last-child { border-right: none; }
+        .group-wrapper { margin-top: 30px; }
+        .group-header { background-color: var(--bg-card); font-weight: 600; border-top-left-radius: 6px; border-top-right-radius: 6px; color: white; }
+        input[type="text"], input[type="date"], input[type="email"], input[type="password"] { background: transparent; border: none; color: white; font-size: 0.95rem; width: 100%; outline: none; }
+        input[type="text"]::placeholder, input[type="email"]::placeholder, input[type="password"]::placeholder { color: var(--text-muted); }
+        .status-cell { padding: 0; position: relative; }
+        .badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 500; cursor: pointer; }
+        .badge.done { background-color: var(--status-done); }
+        .badge.todo { background-color: var(--status-todo); }
+        .badge.progress { background-color: var(--status-progress); color: #000; }
+        .badge.blocked { background-color: var(--status-blocked); }
+        .badge.group-badge { background-color: var(--status-group); cursor: default; }
+        .status-dropdown { display: none; position: absolute; top: 100%; left: 0; width: 100%; background-color: var(--bg-row); z-index: 10; box-shadow: 0px 4px 12px rgba(0,0,0,0.5); flex-direction: column; }
+        .status-dropdown.show { display: flex; }
+        .dropdown-item { padding: 8px 0; text-align: center; font-size: 0.85rem; cursor: pointer; }
+        .dropdown-item:hover { filter: brightness(1.2); }
+        .item-todo { background-color: var(--status-todo); color: white; }
+        .item-progress { background-color: var(--status-progress); color: black; }
+        .item-done { background-color: var(--status-done); color: white; }
+        .item-blocked { background-color: var(--status-blocked); color: white; }
+        .task-completed .task-input { text-decoration: line-through; color: var(--text-muted); }
+        .task-completed { background-color: #1f232b; }
     </style>
 </head>
 <body>
 
-<div class="checklist-container">
-    <h2>My Checklist</h2>
+<!-- Multi-Step Login Overlay -->
+<div id="login-screen">
     
-    <form id="taskForm">
-        <input type="text" id="taskInput" placeholder="Add a new task..." required>
-        <button type="submit">Add Task</button>
-    </form>
+    <!-- Step 1: Select or Create Profile -->
+    <div class="login-box" id="step-1-profiles">
+        <h2>Select Profile</h2>
+        <div id="profile-list" style="margin-top: 15px; max-height: 140px; overflow-y: auto;">
+            <!-- Existing profiles injected here -->
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+        
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px;">Create a new profile</p>
+        <input type="text" id="new-username" placeholder="Profile Name (e.g. Andeng)" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 8px;">
+        <input type="email" id="new-email" placeholder="Email Address for Alerts" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 8px;">
+        <input type="password" id="new-password" placeholder="Set Password" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin-bottom: 8px;">
+        <button onclick="createProfile()">Create & Login</button>
+    </div>
 
-    <ul id="taskList">
-        <!-- Tasks will be injected here by JavaScript -->
-    </ul>
+    <!-- Step 2: Enter Password -->
+    <div class="login-box" id="step-2-password" style="display: none;">
+        <h2 id="login-greeting">Welcome Back</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Please enter your password.</p>
+        <input type="password" id="login-password" placeholder="Password" style="background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; margin: 15px 0;" onkeypress="handlePassEnter(event)">
+        <button onclick="verifyPassword()">Login</button>
+        <button onclick="backToProfiles()" style="background-color: transparent; border: 1px solid var(--border-color); margin-top: 10px;">Cancel</button>
+    </div>
+
+</div>
+
+<!-- Main App UI -->
+<div id="sidebar">
+    <div class="profile-section">
+        <div class="profile-avatar" id="avatar-initial">U</div>
+        <div id="profile-name" style="font-weight: bold; font-size: 1.1rem;">User</div>
+        <div id="profile-email-display" style="color: var(--text-muted); font-size: 0.75rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;">email@example.com</div>
+        <div style="color: var(--status-done); font-size: 0.8rem; margin-top: 4px;">● Online</div>
+    </div>
+    <div class="nav-item active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+    <div class="nav-item" onclick="switchTab('board')">📋 Task Board</div>
+    <div class="nav-item" onclick="switchTab('history')">🕰️ History Log</div>
+    <div class="logout-btn" onclick="logout()">🚪 Exit to Profiles</div>
+</div>
+
+<div id="main-content">
+    
+    <!-- Dashboard View -->
+    <div id="dashboard-view" class="view-section active">
+        <h1 id="welcome-message">Dashboard</h1>
+        <p style="color: var(--text-muted);">Here is the current progress for this workspace.</p>
+        
+        <div class="dashboard-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Tasks</div>
+                <div class="stat-value" id="stat-total" style="color: var(--status-todo);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">In Progress</div>
+                <div class="stat-value" id="stat-progress" style="color: var(--status-progress);">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value" id="stat-done" style="color: var(--status-done);">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Board View -->
+    <div id="board-view" class="view-section">
+        <div class="header-actions">
+            <button class="action-btn group-btn" onclick="addCustomGroup()">+ New Project List</button>
+        </div>
+        <div class="grid-row grid-header">
+            <div class="cell"></div>
+            <div class="cell">Task Title</div>
+            <div class="cell">Notes (Optional)</div>
+            <div class="cell">Status</div>
+            <div class="cell">Due Date</div>
+        </div>
+        <div id="board-content"></div>
+    </div>
+
+    <!-- History View -->
+    <div id="history-view" class="view-section">
+        <h1>Completion History</h1>
+        <p style="color: var(--text-muted);">A chronological log of all finished tasks for this profile.</p>
+        <div class="history-list" id="history-content"></div>
+    </div>
+
 </div>
 
 <script>
-    // Replace this with your actual n8n webhook URL
     const N8N_WEBHOOK_URL = 'https://ndb1.api.fpctools.com/webhook/add-task';
+    const boardContent = document.getElementById('board-content');
+    const historyContent = document.getElementById('history-content');
+    
+    // Auth & Data Management (Stores { password, email })
+    let usersDb = JSON.parse(localStorage.getItem('workspace_users_v2')) || {};
+    let activeProfile = null;
+    let activeEmail = null;
+    let appState = { total: 0, progress: 0, done: 0 };
 
-    const taskForm = document.getElementById('taskForm');
-    const taskInput = document.getElementById('taskInput');
-    const taskList = document.getElementById('taskList');
+    window.onload = () => {
+        renderProfiles();
+    };
 
-    // Function to send a new task to n8n
-    taskForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    function renderProfiles() {
+        const list = document.getElementById('profile-list');
+        list.innerHTML = '';
         
-        const taskName = taskInput.value;
-        taskInput.value = ''; // Clear input
-
-        // Optimistically add to UI
-        addTaskToUI(taskName, false);
-
-        try {
-            // Send to n8n Webhook
-            const response = await fetch(N8N_WEBHOOK_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'create',
-                    task_name: taskName,
-                    status: 'pending'
-                })
+        const usernames = Object.keys(usersDb);
+        if(usernames.length === 0) {
+            list.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No profiles found. Create one below.</p>';
+        } else {
+            usernames.forEach(name => {
+                const btn = document.createElement('button');
+                btn.className = 'profile-btn';
+                btn.textContent = name;
+                btn.onclick = () => selectProfile(name);
+                list.appendChild(btn);
             });
+        }
+    }
 
-            if (!response.ok) {
-                console.error('Failed to save to n8n database');
+    function createProfile() {
+        const name = document.getElementById('new-username').value.trim();
+        const email = document.getElementById('new-email').value.trim();
+        const pass = document.getElementById('new-password').value.trim();
+        
+        if (!name || !email || !pass) return alert('Please fill in all fields (Name, Email, Password).');
+        if (usersDb[name]) return alert('Profile already exists. Choose another name.');
+
+        usersDb[name] = { password: pass, email: email };
+        localStorage.setItem('workspace_users_v2', JSON.stringify(usersDb));
+        
+        localStorage.setItem(`data_${name}`, JSON.stringify({
+            appState: { total: 0, progress: 0, done: 0 },
+            boardHtml: '',
+            historyHtml: ''
+        }));
+
+        activeProfile = name;
+        activeEmail = email;
+        unlockApp(name, email);
+    }
+
+    function selectProfile(name) {
+        activeProfile = name;
+        document.getElementById('step-1-profiles').style.display = 'none';
+        document.getElementById('step-2-password').style.display = 'block';
+        document.getElementById('login-greeting').textContent = `Hi, ${name}`;
+        document.getElementById('login-password').focus();
+    }
+
+    function backToProfiles() {
+        activeProfile = null;
+        document.getElementById('step-1-profiles').style.display = 'block';
+        document.getElementById('step-2-password').style.display = 'none';
+        document.getElementById('login-password').value = '';
+    }
+
+    function handlePassEnter(e) {
+        if (e.key === 'Enter') verifyPassword();
+    }
+
+    function verifyPassword() {
+        const pass = document.getElementById('login-password').value;
+        const userData = usersDb[activeProfile];
+        
+        if (userData && userData.password === pass) {
+            activeEmail = userData.email;
+            unlockApp(activeProfile, activeEmail);
+        } else {
+            alert('Incorrect Password');
+        }
+    }
+
+    function logout() {
+        saveProfileData();
+        activeProfile = null;
+        activeEmail = null;
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('login-screen').style.opacity = '1';
+        backToProfiles();
+        renderProfiles();
+    }
+
+    function unlockApp(name, email) {
+        document.getElementById('login-screen').style.opacity = '0';
+        setTimeout(() => document.getElementById('login-screen').style.display = 'none', 500);
+        
+        document.getElementById('profile-name').textContent = name;
+        document.getElementById('profile-email-display').textContent = email;
+        document.getElementById('avatar-initial').textContent = name.charAt(0).toUpperCase();
+        document.getElementById('welcome-message').textContent = `${name}'s Dashboard`;
+        
+        const data = JSON.parse(localStorage.getItem(`data_${name}`));
+        appState = data.appState;
+        boardContent.innerHTML = data.boardHtml;
+        historyContent.innerHTML = data.historyHtml;
+        
+        if(boardContent.innerHTML.trim() === '') {
+            const initialGroup = createGroupWrapper("My Tasks");
+            renderFastAddRow(initialGroup, "My Tasks");
+        }
+        
+        updateDashboard();
+        
+        document.getElementById('new-username').value = '';
+        document.getElementById('new-email').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('login-password').value = '';
+        
+        switchTab('dashboard');
+    }
+
+    function saveProfileData() {
+        if (!activeProfile) return;
+        localStorage.setItem(`data_${activeProfile}`, JSON.stringify({
+            appState: appState,
+            boardHtml: boardContent.innerHTML,
+            historyHtml: historyContent.innerHTML
+        }));
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => {
+            if(el.textContent.toLowerCase().includes(tabId)) el.classList.add('active');
+        });
+
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${tabId}-view`).classList.add('active');
+    }
+
+    function addCustomGroup() {
+        const groupName = prompt("Enter Project Name:");
+        if (groupName) {
+            const container = createGroupWrapper(groupName);
+            renderFastAddRow(container, groupName);
+            saveProfileData();
+        }
+    }
+
+    function createGroupWrapper(name) {
+        const groupWrapper = document.createElement('div');
+        groupWrapper.className = 'group-wrapper';
+        
+        const headerRow = document.createElement('div');
+        headerRow.className = 'grid-row group-header';
+        headerRow.innerHTML = `
+            <div class="cell"></div>
+            <div class="cell">${name}</div>
+            <div class="cell"></div>
+            <div class="cell status-cell"><div class="badge group-badge"></div></div>
+            <div class="cell status-cell"><div class="badge group-badge"></div></div>
+        `;
+
+        const subTaskContainer = document.createElement('div');
+        subTaskContainer.className = 'sub-task-container';
+        subTaskContainer.dataset.groupName = name;
+
+        groupWrapper.appendChild(headerRow);
+        groupWrapper.appendChild(subTaskContainer);
+        boardContent.appendChild(groupWrapper);
+        return subTaskContainer;
+    }
+
+    function renderFastAddRow(container, groupName) {
+        const row = document.createElement('div');
+        row.className = 'grid-row fast-add-row';
+        row.innerHTML = `
+            <div class="cell"></div>
+            <div class="cell"><input type="text" class="add-row-input" placeholder="+ Add task (press Enter to save)"></div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        `;
+        
+        const input = row.querySelector('input');
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                const taskName = this.value;
+                this.value = ''; 
+                
+                row.remove();
+                renderTaskRow(taskName, 'todo', container, groupName);
+                renderFastAddRow(container, groupName);
+                container.querySelector('.fast-add-row input').focus();
+                
+                appState.total++;
+                updateDashboard();
+                saveProfileData();
+                
+                sendToN8n(taskName, 'todo', '', '', activeProfile); 
             }
-        } catch (error) {
-            console.error('Error connecting to n8n:', error);
+        });
+        container.appendChild(row);
+    }
+
+    function renderTaskRow(taskName, statusClass, container, groupName) {
+        const row = document.createElement('div');
+        row.className = 'grid-row task-row';
+        row.innerHTML = `
+            <div class="cell"><input type="checkbox" onchange="toggleCheckbox(this)"></div>
+            <div class="cell"><input type="text" value="${taskName}" class="task-input" onchange="triggerUpdate(this)"></div>
+            <div class="cell"><input type="text" placeholder="Add a note..." class="note-input" onchange="triggerUpdate(this)"></div>
+            <div class="cell status-cell">
+                <div class="badge status-badge todo" onclick="toggleDropdown(event, this)">To Do</div>
+                <div class="status-dropdown">
+                    <div class="dropdown-item item-todo" onclick="changeStatus(this, 'todo', 'To Do')">To Do</div>
+                    <div class="dropdown-item item-progress" onclick="changeStatus(this, 'progress', 'In Progress')">In Progress</div>
+                    <div class="dropdown-item item-done" onclick="changeStatus(this, 'done', 'Done')">Done</div>
+                    <div class="dropdown-item item-blocked" onclick="changeStatus(this, 'blocked', 'Blocked')">Blocked</div>
+                </div>
+            </div>
+            <div class="cell"><input type="date" class="date-input" onchange="triggerUpdate(this)"></div>
+        `;
+        container.appendChild(row);
+    }
+
+    function toggleCheckbox(checkbox) {
+        const row = checkbox.closest('.grid-row');
+        const option = row.querySelector(checkbox.checked ? '.item-done' : '.item-todo');
+        changeStatus(option, checkbox.checked ? 'done' : 'todo', checkbox.checked ? 'Done' : 'To Do');
+    }
+
+    function toggleDropdown(event, badgeElement) {
+        event.stopPropagation();
+        document.querySelectorAll('.status-dropdown.show').forEach(d => {
+            if (d !== badgeElement.nextElementSibling) d.classList.remove('show');
+        });
+        badgeElement.nextElementSibling.classList.toggle('show');
+    }
+
+    function changeStatus(optionElement, newClass, newText) {
+        const dropdown = optionElement.parentElement;
+        const badge = dropdown.previousElementSibling;
+        const row = optionElement.closest('.task-row');
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        const taskName = row.querySelector('.task-input').value;
+        const oldClass = badge.classList[2];
+        
+        badge.className = 'badge status-badge ' + newClass;
+        badge.textContent = newText;
+        dropdown.classList.remove('show');
+        
+        if(oldClass === 'progress') appState.progress--;
+        if(oldClass === 'done') appState.done--;
+        
+        if(newClass === 'progress') appState.progress++;
+        if(newClass === 'done') {
+            appState.done++;
+            row.classList.add('task-completed');
+            checkbox.checked = true;
+            logToHistory(taskName);
+        } else {
+            row.classList.remove('task-completed');
+            checkbox.checked = false;
+        }
+        
+        updateDashboard();
+        saveProfileData();
+        triggerUpdate(row.querySelector('.task-input'));
+    }
+
+    function logToHistory(taskName) {
+        const now = new Date();
+        const timeString = now.toLocaleDateString() + ' at ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <div><strong>${taskName}</strong></div>
+            <div class="history-date">${timeString}</div>
+        `;
+        historyContent.prepend(item);
+    }
+
+    function updateDashboard() {
+        document.getElementById('stat-total').textContent = appState.total;
+        document.getElementById('stat-progress').textContent = appState.progress;
+        document.getElementById('stat-done').textContent = appState.done;
+    }
+
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.status-dropdown')) {
+            document.querySelectorAll('.status-dropdown.show').forEach(d => d.classList.remove('show'));
         }
     });
 
-    // Helper function to update the DOM
-    function addTaskToUI(taskName, isCompleted) {
-        const li = document.createElement('li');
-        li.textContent = taskName;
-        
-        if (isCompleted) {
-            li.classList.add('completed');
-        }
+    function triggerUpdate(element) {
+        const row = element.closest('.task-row');
+        const taskName = row.querySelector('.task-input').value;
+        const notes = row.querySelector('.note-input').value;
+        const dueDate = row.querySelector('.date-input').value;
+        const status = row.querySelector('.status-badge').textContent.toLowerCase();
 
-        const completeBtn = document.createElement('button');
-        completeBtn.textContent = 'Done';
-        completeBtn.style.padding = '5px 10px';
-        completeBtn.style.fontSize = '12px';
-        
-        completeBtn.onclick = () => {
-            li.classList.add('completed');
-            completeBtn.remove();
-            // You can add another fetch() here to send an "update" action to n8n
-        };
-
-        li.appendChild(completeBtn);
-        taskList.appendChild(li);
+        saveProfileData();
+        sendToN8n(taskName, status, notes, dueDate, activeProfile);
     }
 
-    // Optional: Add a function here to fetch existing tasks from Postgres via n8n on page load
+    async function sendToN8n(taskName, status, notes, dueDate, profileOwner) {
+        try {
+            await fetch(N8N_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: taskName,
+                    notes: notes,
+                    status: status,
+                    due_date: dueDate || null,
+                    owner: profileOwner,
+                    email: activeEmail // Automatically attaches the user's email address
+                })
+            });
+        } catch (error) {
+            console.error('Webhook error:', error);
+        }
+    }
 </script>
 
 </body>
