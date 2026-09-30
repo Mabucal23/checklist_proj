@@ -17,7 +17,8 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ (() => { const body = $json.body || {}; const q = value => \"'\" + String(value || '').replace(/'/g, \"''\") + \"'\"; const action = body.action; if (action === 'list') return 'SELECT id, username, email, created_at FROM profiles ORDER BY LOWER(username)'; if (action === 'create') return `INSERT INTO profiles (username, email, password_hash) VALUES (${q(body.username)}, ${q(body.email)}, crypt(${q(body.password)}, gen_salt('bf', 12))) RETURNING id, username, email, created_at`; if (action === 'login') return `SELECT id, username, email, created_at FROM profiles WHERE username = ${q(body.username)} AND password_hash = crypt(${q(body.password)}, password_hash)`; throw new Error('Unsupported profile action'); })() }}"
+        "query": "={{ (() => { const body = $('Profile Auth Webhook').item.json.body || {}; const q = value => \"'\" + String(value || '').replace(/'/g, \"''\") + \"'\"; const action = body.action; if (action === 'list') return 'SELECT id, username, email, created_at FROM profiles ORDER BY LOWER(username)'; if (action === 'create') return `INSERT INTO profiles (username, email, password_hash) VALUES (${q(body.username)}, ${q(body.email)}, crypt(${q(body.password)}, gen_salt('bf', 12))) RETURNING id, username, email, created_at`; if (action === 'login') return `SELECT id, username, email, created_at FROM profiles WHERE username = ${q(body.username)} AND password_hash = crypt(${q(body.password)}, password_hash)`; throw new Error('Unsupported profile action'); })() }}",
+        "alwaysOutputData": true
       },
       "id": "profile-auth-query",
       "name": "Profile Database Query",
@@ -33,8 +34,18 @@
     },
     {
       "parameters": {
+        "jsCode": "const request = $('Profile Auth Webhook').first().json.body || {};\nconst row = $input.first()?.json || {};\nconst hasProfile = row.id !== undefined && row.id !== null;\n\nif (request.action === 'list') {\n  return [{ json: { status: 'success', profiles: $input.all().map(item => item.json) } }];\n}\n\nif (!hasProfile) {\n  return [{ json: { status: 'error', message: request.action === 'login' ? 'Incorrect username or password' : 'Profile could not be created' } }];\n}\n\nreturn [{ json: { status: 'success', profile: row } }];"
+      },
+      "id": "profile-auth-format-response",
+      "name": "Format Profile Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ (() => { const body = $('Profile Auth Webhook').item.json.body || {}; const rows = $input.all().map(item => item.json); if (body.action === 'list') return { status: 'success', profiles: rows }; if (rows.length === 0) return { status: 'error', message: 'Incorrect username or password' }; return { status: 'success', profile: rows[0] }; })() }}",
+        "responseBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
       "id": "profile-auth-response",
@@ -49,6 +60,9 @@
       "main": [[{ "node": "Profile Database Query", "type": "main", "index": 0 }]]
     },
     "Profile Database Query": {
+      "main": [[{ "node": "Format Profile Response", "type": "main", "index": 0 }]]
+    },
+    "Format Profile Response": {
       "main": [[{ "node": "Respond to Profile Auth", "type": "main", "index": 0 }]]
     }
   },
